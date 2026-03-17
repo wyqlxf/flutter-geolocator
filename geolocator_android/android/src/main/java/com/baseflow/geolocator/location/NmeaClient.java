@@ -6,6 +6,7 @@ import android.annotation.TargetApi;
 import android.content.Context;
 import android.content.pm.PackageManager;
 import android.location.GnssStatus;
+import android.util.Log;
 import android.location.Location;
 import android.location.LocationManager;
 import android.location.OnNmeaMessageListener;
@@ -19,6 +20,7 @@ import java.util.Calendar;
 
 public class NmeaClient {
 
+  private static final String TAG = "FlutterGeolocator";
   public static final String NMEA_ALTITUDE_EXTRA = "geolocator_mslAltitude";
   public static final String GNSS_SATELLITE_COUNT_EXTRA = "geolocator_mslSatelliteCount";
   public static final String GNSS_SATELLITES_USED_IN_FIX_EXTRA = "geolocator_mslSatellitesUsedInFix";
@@ -74,24 +76,32 @@ public class NmeaClient {
     }
 
     if (locationOptions != null) {
-      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && locationManager != null) {
-        if (context.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)
-            == PackageManager.PERMISSION_GRANTED) {
-          locationManager.addNmeaListener(nmeaMessageListener, null);
-          locationManager.registerGnssStatusCallback(gnssCallback, null);
-          listenerAdded = true;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && locationManager != null) {
+            if (context.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)
+                    == PackageManager.PERMISSION_GRANTED) {
+                try {
+                    locationManager.addNmeaListener(nmeaMessageListener, null);
+                    locationManager.registerGnssStatusCallback(gnssCallback, null);
+                    listenerAdded = true;
+                } catch (SecurityException e) {
+                    Log.e(TAG, "NMEA/GNSS listener registration failed (e.g. work profile, Android 14+): " + e.getMessage());
+                }
+            }
         }
-      }
     }
   }
 
   public void stop() {
     if (locationOptions != null) {
-      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && locationManager != null) {
-        locationManager.removeNmeaListener(nmeaMessageListener);
-        locationManager.unregisterGnssStatusCallback(gnssCallback);
-        listenerAdded = false;
-      }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && locationManager != null) {
+            try {
+                locationManager.removeNmeaListener(nmeaMessageListener);
+                locationManager.unregisterGnssStatusCallback(gnssCallback);
+            } catch (Exception e) {
+                Log.w(TAG, "NMEA/GNSS listener removal failed: " + e.getMessage());
+            }
+            listenerAdded = false;
+        }
     }
   }
 
@@ -118,7 +128,6 @@ public class NmeaClient {
 
       if (locationOptions.isUseMSLAltitude()) {
         String[] tokens = lastNmeaMessage.split(",");
-        String type = tokens[0];
 
         // Parse altitude above sea level, Detailed description of NMEA string here
         // http://aprs.gids.nl/nmea/#gga
